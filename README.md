@@ -57,3 +57,5 @@
                 LM Score: 84.17236429175225
                 SS Score: 58.24009298588702
                 ICAT Score: 70.30060211963236
+
++ Next step is to turn this into a pipeline where we can tinker with the batch size.
