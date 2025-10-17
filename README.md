@@ -1,6 +1,6 @@
 ### BEFORE YOU USE ###
 
-+ Switch to the proper python version with the command
++ Switch to the proper python version with the command (any other python 3.9 works, but newer models like 3.14)
 
     `pyenv global 3.9.20`
 
