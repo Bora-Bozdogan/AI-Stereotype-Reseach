@@ -4,6 +4,10 @@
 
 ### BertModel
 
+`python3 .bias-bench/experiments/stereoset_debias.py --model "SentenceDebiasBertForMaskedLM" --bias_direction PUT_HERE --bias_type "gender"`
+
++ needs a bias_direction
+
 # STEREOSET BASE commands used
 
 ## evaluation of all json files

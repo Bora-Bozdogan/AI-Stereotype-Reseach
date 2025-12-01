@@ -1,0 +1,1 @@
+Just change parameters in compute_bias_direction.py and run it. It only computes bias direction.
