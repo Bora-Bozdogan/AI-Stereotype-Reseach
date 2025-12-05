@@ -4,9 +4,15 @@
 
 ### BertModel
 
-`python3 .bias-bench/experiments/stereoset_debias.py --model "SentenceDebiasBertForMaskedLM" --bias_direction PUT_HERE --bias_type "gender"`
+`python3 ./bias-bench/experiments/stereoset_debias.py --model "SentenceDebiasBertForMaskedLM" --bias_direction PUT_HERE --bias_type "gender"`
 
-+ needs a bias_direction
+# Bias Direction 
+
+In `/debias_computations/compute_bias_direction.py`, run it to create bias direction for relevant matrices.
+
+# INLP 
+
+
 
 # STEREOSET BASE commands used
 

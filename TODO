@@ -1,1 +1,3 @@
-I need to compute debias subspaces for bert, then run the tests based on those subspaces.
+I need to compute debias subspaces for bert, then run the tests based on those subspaces. Stereoset
+
+Then I need to work on intersentence evaluations
