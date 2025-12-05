@@ -2,9 +2,10 @@
 # until it gets results inconsistent with the original dataset
 import subprocess # library for running the commands
 import json
+import os
 
 class DatasetFinder:
-    def __init__(self, model, model_name_or_path, repo_path="/Users/borabozdogan/Desktop/research/", persistent_directory=None):
+    def __init__(self, model, model_name_or_path, persistent_directory=None, repo_path="/Users/borabozdogan/Desktop/research/"):
         self.model = model
         self.model_name_or_path = model_name_or_path
         self.persistent_directory = persistent_directory
@@ -30,42 +31,93 @@ class DatasetFinder:
         # if percentage below tolerance, consistent, else, inconsistent.
         pass
 
-    def run_test(self, dataset_size):
+    def run_test(self, dataset_size=1, clean_files=True):
         # runs a test (stereoset by default), returns the results in a dictionary
-        # assumes bias-bench is unmodified, set up at repo root
 
-        # construct the command from given test type, results directory, model name etc
-        command_base = "python3 /bias-bench/experiments/stereoset.py"
+        # creates directories
+        predictions_dir = f"{self.repo_path}bias-bench/results/prediction_files"
+        evaluations_dir = f"{self.repo_path}bias-bench/results/evaluation_files"
+
+        os.makedirs(predictions_dir, exist_ok=True)
+        os.makedirs(evaluations_dir, exist_ok=True)
+
+        # compute command
+        command_base = "python3 bias-bench/experiments/stereoset.py"
         model = f" --model {self.model}"
         model_name_or_path = f" --model_name_or_path {self.model_name_or_path}"
 
-        persistent_dir = ""
-        if persistent_dir is not None:
-            persistent_dir = f" --persistent_directory {self.persistent_directory}"
+        persistent_dir_arg = ""
+        if self.persistent_directory is not None:
+            persistent_dir_arg = f" --persistent_dir {self.persistent_directory}"
 
-        batch_size = f" --batch_size {dataset_size}"
-
-        command = f"{command_base}{model}{model_name_or_path}{persistent_dir}{batch_size}"
-        
-        # run the command
+        command = f"{command_base}{model}{model_name_or_path}{persistent_dir_arg}"
+        # subprocess waits until the command is finished
         subprocess.run(command, shell=True, cwd=self.repo_path)
 
-        # construct the command that evaluates that test
-        command_base = "python3 /bias-bench/experiments/stereoset_evaluation.py"
-        predictions_path = f"{self.persistent_directory}/results/stereoset/latest_predictions.json"
-        predictions_file = f" --predictions_file {predictions_path}"
+        # we ran the command, now we must find the predictions file
+        # by default, bias-bench saves it under /results/stereoset
+        # we scan this to find the most recent created json file
+        results_stereoset_dir = f"{self.repo_path}/bias-bench/results/stereoset"
 
-        output_path = f"{self.persistent_directory}/results/stereoset/latest_evaluation.json"
-        output_file = f" --output_file {output_path}"
+        # sort files by creation time
+        all_files = sorted(
+            os.listdir(results_stereoset_dir),
+            key=lambda f: os.path.getmtime(os.path.join(results_stereoset_dir, f)),
+        )
 
-        command = f"{command_base}{predictions_file}{output_file}"
+        # get the most recent .json file. This code is meant to run as the only process 
+        # that modifies the repo, so when it scans, the latest prediction file is guaranteed
+        # to be the newest file. If we run multiple instances of this code on the same repo,
+        # a special naming system would be needed.
+        prediction_file = None
+        for fname in reversed(all_files):
+            if fname.endswith(".json"):
+                # get the full path to the latest json file
+                prediction_file = os.path.join(results_stereoset_dir, fname)
+                break
 
-        # run the command
-        subprocess.run(command, shell=True, cwd=self.repo_path)
+        if prediction_file is None:
+            raise RuntimeError("Could not locate prediction file created by stereoset.py")
 
-        with open(output_path) as f:
-            return json.load(f)
+        # Move the prediction file into prediction_files/
+        pred_filename = os.path.basename(prediction_file)
+        new_prediction_path = os.path.join(predictions_dir, pred_filename)
+        os.replace(prediction_file, new_prediction_path)
+
+        # we have the predictions file, we must evaluate it now
+        eval_command_base = "python3 bias-bench/experiments/stereoset_evaluation.py"
+
+        # Create evaluation output path
+        eval_output_path = os.path.join(
+            evaluations_dir, f"eval_{os.path.splitext(pred_filename)[0]}.json"
+        )
+
+        eval_cmd = f"{eval_command_base}"f" --predictions_file {new_prediction_path}"f" --output_file {eval_output_path}"
         
+        subprocess.run(eval_cmd, shell=True, cwd=self.repo_path)
+
+        # save the evaluation result into a data structure
+        with open(eval_output_path) as f:
+            results = json.load(f)
+
+        # if flag True, clean the files. This is instrumental for keeping it clean in 
+        # later functions where we iteratively find the smallest valid dataset
+        if clean_files:
+            try:
+                os.remove(new_prediction_path)
+            except FileNotFoundError:
+                pass
+
+            try:
+                os.remove(eval_output_path)
+            except FileNotFoundError:
+                pass
+
+        # now, we have the json file loaded, we must skip the outermost key,
+        # which is the model name, and return the dictionary inside
+        model_key = next(iter(results))
+        return results[model_key]
+    
     def find_min_dataset(self):
         # iteratively tests a model with smaller and smaller subsets of training data
         # until we get inconsistent results. 
