@@ -10,26 +10,68 @@ class DatasetFinder:
         self.model_name_or_path = model_name_or_path
         self.persistent_directory = persistent_directory
         self.repo_path = repo_path
+        self.dataset_scores = self.run_test()
         
     def check_consistence(self, subset, tolerance):
-        # checks if the result of current dataset is consistent with results of full dataset
+        # checks the subset scores against the dataset_scores given
+        # returns true if difference below tolerance (percentage), false else
+        # compares ICAT scores because that's the main metric, can be modified
 
-        # the dictionary structure is as follows
-        # key 1 ("intrasentence") -> array of dictionaries
-        # each dictionary in array: "id" -> id, "score" -> score
+        # the dictionaries have the following structure:
+        # (pasted here for my own convenience)
+        # intrasentence: 
+        #   profession:
+        #       "Count"
+        #       "LM Score"
+        #       "SS Score"
+        #       "ICAT Score"
+        #   race
+        #       "Count"
+        #       "LM Score"
+        #       "SS Score"
+        #       "ICAT Score"
+        #   religion
+        #       "Count"
+        #       "LM Score"
+        #       "SS Score"
+        #       "ICAT Score"
+        # overall:
+        #       "Count"
+        #       "LM Score"
+        #       "SS Score"
+        #       "ICAT Score"
 
-        # first, turn subset into a single dictionary of id score pairs
-        # then, compute the average score for given subset
-        subset_dict = {}
+        # we must compare the ICAT scores of each task, and the overall score
+        # if any below tolerance, fail
+        
+        # get icat scores (0: profession, 1: race, 2: religion, 3: overall)
+        dataset_intrasentence = self.dataset_scores["intrasentence"]
 
-        for value in subset["intrasentence"]:
-            subset_dict[value["id"]] = value["score"]
+        dataset_values = []
 
-        # compute difference of subset and full dataset average, 
-        # turn into percentage by dividing with full dataset average, take abs. value
+        dataset_values.append(dataset_intrasentence["profession"]["ICAT Score"])
+        dataset_values.append(dataset_intrasentence["race"]["ICAT Score"])
+        dataset_values.append(dataset_intrasentence["religion"]["ICAT Score"])
+        dataset_values.append(self.dataset_scores["overall"]["ICAT Score"])
+        
+        subset_intrasentence = subset["intrasentence"]
 
-        # if percentage below tolerance, consistent, else, inconsistent.
-        pass
+        subset_values = []
+
+        subset_values.append(subset_intrasentence["profession"]["ICAT Score"])
+        subset_values.append(subset_intrasentence["race"]["ICAT Score"])
+        subset_values.append(subset_intrasentence["religion"]["ICAT Score"])
+        subset_values.append(subset["overall"]["ICAT Score"])
+        
+        # absolute percentage difference function to make it easier
+        def abs_percent_diff(val, ref):
+            return abs(val - ref) / abs(ref)
+        
+        for base, sub in zip(dataset_values, subset_values):
+            if abs_percent_diff(base, sub) > tolerance:
+                return False
+        
+        return True
 
     def run_test(self, dataset_size=1, clean_files=True):
         # runs a test (stereoset by default), returns the results in a dictionary
