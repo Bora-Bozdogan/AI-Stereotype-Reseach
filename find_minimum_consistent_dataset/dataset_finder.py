@@ -1,15 +1,14 @@
 # This is a simple script that runs bias detection on a (non debiased) model repeatedly with smaller datasets
 # until it gets results inconsistent with the original dataset
 import subprocess # library for running the commands
+import json
 
 class DatasetFinder:
-    def __init__(self, model, model_name_or_path, persistent_directory=None):
+    def __init__(self, model, model_name_or_path, repo_path="/Users/borabozdogan/Desktop/research/", persistent_directory=None):
         self.model = model
         self.model_name_or_path = model_name_or_path
         self.persistent_directory = persistent_directory
-
-        self.minimum_consistent_dataset_size = 1
-        self.consistent_dataset = self.run_test(1)
+        self.repo_path = repo_path
         
     def check_consistence(self, subset, tolerance):
         # checks if the result of current dataset is consistent with results of full dataset
@@ -37,29 +36,36 @@ class DatasetFinder:
 
         # construct the command from given test type, results directory, model name etc
         command_base = "python3 /bias-bench/experiments/stereoset.py"
-        model = " --model " + self.model
-        model_name_or_path = " --model_name_or_path " + self.model_name_or_path
-        if persistent_dir is not None:
-            persistent_dir = " --persistent_directory " + self.persistent_directory
-        batch_size = " --batch_size " + dataset_size
+        model = f" --model {self.model}"
+        model_name_or_path = f" --model_name_or_path {self.model_name_or_path}"
 
-        command = command_base + model + model_name_or_path + persistent_dir
+        persistent_dir = ""
+        if persistent_dir is not None:
+            persistent_dir = f" --persistent_directory {self.persistent_directory}"
+
+        batch_size = f" --batch_size {dataset_size}"
+
+        command = f"{command_base}{model}{model_name_or_path}{persistent_dir}{batch_size}"
         
         # run the command
+        subprocess.run(command, shell=True, cwd=self.repo_path)
 
         # construct the command that evaluates that test
         command_base = "python3 /bias-bench/experiments/stereoset_evaluation.py"
-        predictions_file = " --predictions_file " 
+        predictions_path = f"{self.persistent_directory}/results/stereoset/latest_predictions.json"
+        predictions_file = f" --predictions_file {predictions_path}"
 
-        output_path = None # path including the filename
-        output_file = " --output_file " + output_path
+        output_path = f"{self.persistent_directory}/results/stereoset/latest_evaluation.json"
+        output_file = f" --output_file {output_path}"
+
+        command = f"{command_base}{predictions_file}{output_file}"
 
         # run the command
-        # have the output path, use default library to save the json file into results dict below
-        results = []
+        subprocess.run(command, shell=True, cwd=self.repo_path)
 
-        return results
-
+        with open(output_path) as f:
+            return json.load(f)
+        
     def find_min_dataset(self):
         # iteratively tests a model with smaller and smaller subsets of training data
         # until we get inconsistent results. 
